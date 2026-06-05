@@ -1,0 +1,15 @@
+# Ignore compiled binaries/executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+online-wardrobe-planner
+
+# Ignore environment/secret variables
+.env
+config.json
+
+# System specific files
+.DS_Store
+Thumbs.db
