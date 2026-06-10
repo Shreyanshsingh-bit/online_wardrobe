@@ -90,6 +90,71 @@ func addClothingItemHandler(w http.ResponseWriter, r *http.Request) {
 
 	
 }
+func getClothingItemsHandler(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodGet{
+		http.Error(w, "Only GET method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userIDStr := r.URL.Query().Get("user_id") //Read the user_id from the URL query parameters
+	if userIDStr == ""{
+		http.Error(w, "Missing required user_id parameter", http.StatusBadRequest)
+		return
+
+	}
+	// query the database for all items belonging to this user
+	rows, err := db.Query(`
+		SELECT id, user_id, image_url, category, sub_category, primary_color, material, min_temp_celsius, max_temp_celsius, is_waterproof, suitable_seasons, is_trending, created_at 
+		FROM clothing_items 
+		WHERE user_id = $1`, userIDStr)
+
+	if err != nil {
+		log.Println("Database query error:", err)
+		http.Error(w, "Database failure", http.StatusInternalServerError)
+		return
+	}
+
+	defer rows.Close() // clears the database connection if already fn esists
+
+	items := []ClothingItem{} // returns [] instead of null
+	for rows.Next() { // loops the conveyor belt of database rows
+		var item ClothingItem
+
+		err:= rows.Scan(
+			&item.ID,
+			&item.UserID,
+			&item.ImageURL,
+			&item.Category,
+			&item.SubCategory,
+			&item.PrimaryColor,
+			&item.Material,
+			&item.MinTempCelsius,
+			&item.MaxTempCelsius,
+			&item.IsWaterproof,
+			pq.Array(&item.SuitableSeasons),// using pq.array to unpack the SQL array
+			&item.IsTrending,
+			&item.CreatedAt,
+		)
+		if err != nil {
+			log.Println("Row scan error:", err)
+			http.Error(w, "Error parsing wardrobe data", http.StatusInternalServerError)
+			return
+		}
+		// append the freshly populated item to our slice
+		items = append(items, item)
+
+
+	}	
+	// ensures the loop didnt stop early because of hidden network issue
+	if err = rows.Err(); err != nil {
+		log.Println("Rows iteration error:", err)
+		http.Error(w, "Error processing wardrobe data", http.StatusInternalServerError)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json") // sends complete array as a clean json response
+	w.WriteHeader(http.StatusOK) // Status code 200 OK
+	json.NewEncoder(w).Encode(items)
+}
 
 func main() {
 	//The connection string uses database credentials
@@ -114,8 +179,19 @@ func main() {
 	http.HandleFunc("/users", createdUserHandler) // tells server if someone goes to /users run this fn
 
 	// Registering the new clothes doorway
-	http.HandleFunc("/clothes", addClothingItemHandler)
-	
+	// http.HandleFunc("/clothes", addClothingItemHandler)
+
+	// Registering the endpoints to fetch clothes
+	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // since we use the same url path for both adding and viewing
+		if r.Method == http.MethodGet { // routing the traffic based on the http method
+			getClothingItemsHandler(w, r)
+		} else if r.Method == http.MethodPost {
+			addClothingItemHandler(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Starts the server
 	fmt.Println("Server is starting on port 8080...")
 	err = http.ListenAndServe(":8080", nil)
