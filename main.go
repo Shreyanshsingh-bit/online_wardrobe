@@ -182,14 +182,28 @@ func main() {
 	// http.HandleFunc("/clothes", addClothingItemHandler)
 
 	// Registering the endpoints to fetch clothes
-	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // since we use the same url path for both adding and viewing
-		if r.Method == http.MethodGet { // routing the traffic based on the http method
-			getClothingItemsHandler(w, r)
-		} else if r.Method == http.MethodPost {
-			addClothingItemHandler(w, r)
-		} else {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // since we use the same url path for both adding and viewing
+	// 	if r.Method == http.MethodGet { // routing the traffic based on the http method
+	// 		getClothingItemsHandler(w, r)
+	// 	} else if r.Method == http.MethodPost {
+	// 		addClothingItemHandler(w, r)
+	// 	} else {
+	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	// 	}
+	// })
+
+	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){
+		switch r.Method {
+		case http.MethodGet:
+			getClothingItemsHandler(w, r) // Directs to the Read fn
+		
+		case http.MethodPost:
+			addClothingItemHandler(w, r) // directs to the create fn
+
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // if someone send a PUT, DELETE, or PATCH request, handle it here
 		}
+
 	})
 
 	// Starts the server
