@@ -155,6 +155,73 @@ func getClothingItemsHandler(w http.ResponseWriter, r *http.Request){
 	w.WriteHeader(http.StatusOK) // Status code 200 OK
 	json.NewEncoder(w).Encode(items)
 }
+func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	userIDStr := r.URL.Query().Get("user_id")
+	if userIDStr == "" {
+		http.Error(w, "Missing required user_id parameter", http.StatusBadRequest)
+		return
+	}
+	var weather WeatherContext
+	err := json.NewDecoder(r.Body).Decode(&weather) // decodes weather context from request body
+	if err != nil {
+		http.Error(w, "Invalid weather data provided", http.StatusBadRequest)
+		return
+	}
+	//fetches clothes for users from database
+	rows, err := db.Query(`SELECT id, user_id, image_url, category, sub_category, primary_color, material, min_temp_celsius, max_temp_celsius, is_waterproof, suitable_seasons, is_trending, created_at FROM clothing_items WHERE user_id = $1`, userIDStr)
+	if err != nil {
+		log.Println("Database query error:", err)
+		http.Error(w, "Database failure", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+// here starts the recommendation algorithm(filtering loop)
+	var recommendedOutfit []ClothingItem
+	
+	for rows.Next() {
+		var item ClothingItem
+		err := rows.Scan(&item.ID, &item.UserID, &item.ImageURL, &item.Category, &item.SubCategory, &item.PrimaryColor, &item.Material, &item.MinTempCelsius, &item.MaxTempCelsius, &item.IsWaterproof, pq.Array(&item.SuitableSeasons), &item.IsTrending, &item.CreatedAt)
+		if err != nil {
+			log.Println("Row scan error:", err)
+			http.Error(w, "Error reading clothing data", http.StatusInternalServerError)
+			return
+		}
+		// the algo rules
+
+		// checks temp
+		if weather.TemperatureCelsius < item.MinTempCelsius || weather.TemperatureCelsius > item.MaxTempCelsius {
+			continue // Skips too hot or too cold!
+		}
+
+		// if raining prefer waterproof items
+		if weather.IsRaining && !item.IsWaterproof && (item.Category == "Outerwear" || item.Category == "Footwear") {
+			continue // Skips non-waterproof gear in the rain
+		}
+
+		// does it match the current season
+		seasonMatch := false
+		for _, s := range item.SuitableSeasons {
+			if s == weather.CurrentSeason {
+				seasonMatch = true
+				break
+			}
+		}
+		if !seasonMatch {
+			continue // Skip if not designed for this season
+		}
+		// If it passed all filters, add it to the outfit!
+		recommendedOutfit = append(recommendedOutfit, item)
+
+		// returning the filtered outfit to the user
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(recommendedOutfit)
+	}
+}
 
 func main() {
 	//The connection string uses database credentials
@@ -192,7 +259,7 @@ func main() {
 	// 	}
 	// })
 
-	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){
+	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // known as clothes routing block
 		switch r.Method {
 		case http.MethodGet:
 			getClothingItemsHandler(w, r) // Directs to the Read fn
@@ -205,6 +272,7 @@ func main() {
 		}
 
 	})
+	http.HandleFunc("/recommend", getRecommendationHandler) // recommendation doorway
 
 	// Starts the server
 	fmt.Println("Server is starting on port 8080...")
