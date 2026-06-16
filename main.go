@@ -35,19 +35,7 @@ func main() {
 	// Registering the endpoint
 	http.HandleFunc("/users", createdUserHandler) // tells server if someone goes to /users run this fn
 
-	// Registering the new clothes doorway
-	// http.HandleFunc("/clothes", addClothingItemHandler)
-
-	// Registering the endpoints to fetch clothes
-	// http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // since we use the same url path for both adding and viewing
-	// 	if r.Method == http.MethodGet { // routing the traffic based on the http method
-	// 		getClothingItemsHandler(w, r)
-	// 	} else if r.Method == http.MethodPost {
-	// 		addClothingItemHandler(w, r)
-	// 	} else {
-	// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	// 	}
-	// })
+	
 
 	http.HandleFunc("/clothes", func(w http.ResponseWriter, r *http.Request){ // known as clothes routing block
 		switch r.Method {
