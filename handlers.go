@@ -286,3 +286,24 @@ func deleteClothingItemHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Clothing item successfully removed from your closet"})
 }
+
+
+func filterOutfit(closet []ClothingItem, liveTemp int, isRaining bool) []ClothingItem {
+	var recommended []ClothingItem
+
+	for _, item := range closet {
+		//Temperature Check
+		if liveTemp < item.MinTempCelsius || liveTemp > item.MaxTempCelsius {
+			continue
+		}
+
+		
+		if isRaining && !item.IsWaterproof && (item.Category == "Outerwear" || item.Category == "Footwear") {
+			continue
+		}
+
+		recommended = append(recommended, item)
+	}
+
+	return recommended
+}
