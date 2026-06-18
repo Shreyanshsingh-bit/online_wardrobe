@@ -232,18 +232,7 @@ func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
 			continue 
 		}
 
-		// does it match the current season
-		// seasonMatch := false
-		// for _, s := range item.SuitableSeasons {
-		// 	if s == weather.CurrentSeason {
-		// 		seasonMatch = true
-		// 		break
-		// 	}
-		// }
-		// if !seasonMatch {
-		// 	continue // Skip if not designed for this season
-		// }
-		// If it passed all filters, add it to the outfit!
+		
 		recommendedOutfit = append(recommendedOutfit, item)
 
 		// returning the filtered outfit to the user
