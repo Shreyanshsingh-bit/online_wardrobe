@@ -45,6 +45,8 @@ func main() {
 		case http.MethodPost:
 			addClothingItemHandler(w, r) // directs to the create fn
 
+		case http.MethodDelete: // hadles delete fn
+			deleteClothingItemHandler(w, r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // if someone send a PUT, DELETE, or PATCH request, handle it here
 		}

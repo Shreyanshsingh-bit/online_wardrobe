@@ -252,3 +252,37 @@ func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
 		json.NewEncoder(w).Encode(recommendedOutfit)
 	}
 }
+// deleteClothingItemHandler removes a specific clothing item from the database by its ID
+func deleteClothingItemHandler(w http.ResponseWriter, r *http.Request) {
+
+	itemIDStr := r.URL.Query().Get("id")// extract items from url
+	if itemIDStr == "" {
+		http.Error(w, "Missing required id parameter", http.StatusBadRequest)
+		return
+	}
+
+	result, err := db.Exec(`DELETE FROM clothing_items WHERE id = $1`, itemIDStr) // the del statement
+	if err != nil {
+		log.Println("Database deletion error:", err)
+		http.Error(w, "Database failure", http.StatusInternalServerError)
+		return
+	}
+
+	//Verifying if the row actually existed
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Println("Error checking rows affected:", err)
+		http.Error(w, "Database failure", http.StatusInternalServerError)
+		return
+	}
+
+	if rowsAffected == 0 {
+		http.Error(w, "No clothing item found with that ID", http.StatusNotFound)
+		return
+	}
+
+	//Responds with a successful message
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Clothing item successfully removed from your closet"})
+}
