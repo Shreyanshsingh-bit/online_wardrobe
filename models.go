@@ -38,3 +38,9 @@ type WeatherContext struct {
 	CurrentSeason      string `json:"current_season"`
 }
 
+type OpenMeteoResponse struct {
+	CurrentWeather struct {
+		Temperature float64 `json:"temperature"`
+		WeatherCode int     `json:"weathercode"` // Codes indicate if it's raining, snowing, or clear
+	} `json:"current_weather"`
+}

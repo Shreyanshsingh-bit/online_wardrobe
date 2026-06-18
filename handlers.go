@@ -2,6 +2,8 @@ package main
 import(
 	"encoding/json"
 	"log"
+	"fmt"
+	"time"
 	"net/http"
 	"github.com/lib/pq"
 )
@@ -151,22 +153,54 @@ func getClothingItemsHandler(w http.ResponseWriter, r *http.Request){
 	json.NewEncoder(w).Encode(items)
 }
 func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
-	if r.Method != http.MethodPost {
-		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+
+	// fmt.Println("➡️ Step 1: Hit the /recommend endpoint!") // DEBUG PRINT
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Only Get method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	userIDStr := r.URL.Query().Get("user_id")
-	if userIDStr == "" {
-		http.Error(w, "Missing required user_id parameter", http.StatusBadRequest)
+	lat := r.URL.Query().Get("lat")
+	lon := r.URL.Query().Get("lon")
+
+	// fmt.Printf("➡️ Step 2: Extracted Query Parameters -> User: %s, Lat: %s, Lon: %s\n", userIDStr, lat, lon) // DEBUG PRINT
+
+	if userIDStr == "" || lat == "" || lon == ""{
+		http.Error(w, "Missing required user_id, lat, and lon parameter", http.StatusBadRequest)
 		return
 	}
-	var weather WeatherContext
-	err := json.NewDecoder(r.Body).Decode(&weather) // decodes weather context from request body
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	weatherURL := fmt.Sprintf("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s&current_weather=true", lat, lon)
+
+	// fmt.Println("➡️ Step 3: Pinging External API:", weatherURL) // DEBUG PRINT
+
+	resp, err := client.Get(weatherURL)
 	if err != nil {
-		http.Error(w, "Invalid weather data provided", http.StatusBadRequest)
+		log.Println("External weather API connection error:", err)
+		http.Error(w, "Failed to fetch live weather telemetry", http.StatusInternalServerError)
 		return
 	}
-	//fetches clothes for users from database
+	defer resp.Body.Close() // prevents network resource leaks
+
+	// Decode the external API's response into our new OpenMeteoResponse struct
+
+	var apiData OpenMeteoResponse
+	err = json.NewDecoder(resp.Body).Decode(&apiData)
+	if err != nil {
+		log.Println("Error parsing external weather JSON:", err)
+		http.Error(w, "Failed to parse live weather data", http.StatusInternalServerError)
+		return
+	}
+	
+	liveTemp := int(apiData.CurrentWeather.Temperature) // Converting float64 to int to match database
+	liveIsRaining := apiData.CurrentWeather.WeatherCode >= 51 && apiData.CurrentWeather.WeatherCode <= 67
+
+	// Fetches all clothes for this user from the database
+
 	rows, err := db.Query(`SELECT id, user_id, image_url, category, sub_category, primary_color, material, min_temp_celsius, max_temp_celsius, is_waterproof, suitable_seasons, is_trending, created_at FROM clothing_items WHERE user_id = $1`, userIDStr)
 	if err != nil {
 		log.Println("Database query error:", err)
@@ -175,6 +209,7 @@ func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
 	}
 	defer rows.Close()
 // here starts the recommendation algorithm(filtering loop)
+// uses the live data
 	var recommendedOutfit []ClothingItem
 	
 	for rows.Next() {
@@ -187,27 +222,27 @@ func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
 		}
 		// the algo rules
 
-		// checks temp
-		if weather.TemperatureCelsius < item.MinTempCelsius || weather.TemperatureCelsius > item.MaxTempCelsius {
-			continue // Skips too hot or too cold!
+		//matches live temperature
+		if liveTemp < item.MinTempCelsius || liveTemp > item.MaxTempCelsius {
+			continue 
 		}
 
-		// if raining prefer waterproof items
-		if weather.IsRaining && !item.IsWaterproof && (item.Category == "Outerwear" || item.Category == "Footwear") {
-			continue // Skips non-waterproof gear in the rain
+		// Matches live precipitation context
+		if liveIsRaining && !item.IsWaterproof && (item.Category == "Outerwear" || item.Category == "Footwear") {
+			continue 
 		}
 
 		// does it match the current season
-		seasonMatch := false
-		for _, s := range item.SuitableSeasons {
-			if s == weather.CurrentSeason {
-				seasonMatch = true
-				break
-			}
-		}
-		if !seasonMatch {
-			continue // Skip if not designed for this season
-		}
+		// seasonMatch := false
+		// for _, s := range item.SuitableSeasons {
+		// 	if s == weather.CurrentSeason {
+		// 		seasonMatch = true
+		// 		break
+		// 	}
+		// }
+		// if !seasonMatch {
+		// 	continue // Skip if not designed for this season
+		// }
 		// If it passed all filters, add it to the outfit!
 		recommendedOutfit = append(recommendedOutfit, item)
 
