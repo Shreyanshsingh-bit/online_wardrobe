@@ -208,38 +208,27 @@ func getRecommendationHandler(w http.ResponseWriter, r *http.Request){
 		return
 	}
 	defer rows.Close()
-// here starts the recommendation algorithm(filtering loop)
-// uses the live data
-	var recommendedOutfit []ClothingItem
-	
+
+ // pours database rows into a temporary Go slice
+	var fullCloset []ClothingItem
 	for rows.Next() {
 		var item ClothingItem
 		err := rows.Scan(&item.ID, &item.UserID, &item.ImageURL, &item.Category, &item.SubCategory, &item.PrimaryColor, &item.Material, &item.MinTempCelsius, &item.MaxTempCelsius, &item.IsWaterproof, pq.Array(&item.SuitableSeasons), &item.IsTrending, &item.CreatedAt)
 		if err != nil {
 			log.Println("Row scan error:", err)
-			http.Error(w, "Error reading clothing data", http.StatusInternalServerError)
-			return
+			continue
 		}
-		// the algo rules
-
-		//matches live temperature
-		if liveTemp < item.MinTempCelsius || liveTemp > item.MaxTempCelsius {
-			continue 
-		}
-
-		// Matches live precipitation context
-		if liveIsRaining && !item.IsWaterproof && (item.Category == "Outerwear" || item.Category == "Footwear") {
-			continue 
-		}
-
+		fullCloset = append(fullCloset, item)
+	}
+		// running the pure fn algorithm
 		
-		recommendedOutfit = append(recommendedOutfit, item)
+		recommendedOutfit := filterOutfit(fullCloset, liveTemp, liveIsRaining)
 
 		// returning the filtered outfit to the user
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(recommendedOutfit)
-	}
+	
 }
 // deleteClothingItemHandler removes a specific clothing item from the database by its ID
 func deleteClothingItemHandler(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +266,7 @@ func deleteClothingItemHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-func filterOutfit(closet []ClothingItem, liveTemp int, isRaining bool) []ClothingItem {
+func filterOutfit(closet []ClothingItem, liveTemp int, isRaining bool) []ClothingItem { // pure fn takes whole closet and weather, returns the outfit
 	var recommended []ClothingItem
 
 	for _, item := range closet {
