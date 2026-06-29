@@ -1,5 +1,8 @@
 package main
 import(
+	"io"
+	// "net/http"
+	"os"
 	"encoding/json"
 	"log"
 	"fmt"
@@ -284,4 +287,48 @@ func filterOutfit(closet []ClothingItem, liveTemp int, isRaining bool) []Clothin
 	}
 
 	return recommended
+}
+// HandleVirtualTryOn catches the user request and routes it to the AI microservice
+func HandleVirtualTryOn(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse the incoming request (Limit upload size to 10MB)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		http.Error(w, "Failed to parse upload size", http.StatusBadRequest)
+		return
+	}
+
+	// 2. Extract the User Image
+	userFile, _, err := r.FormFile("user_image")
+	if err != nil {
+		http.Error(w, "User image missing", http.StatusBadRequest)
+		return
+	}
+	defer userFile.Close()
+
+	// 3. Extract the Garment Image
+	garmentFile, _, err := r.FormFile("garment_image")
+	if err != nil {
+		http.Error(w, "Garment image missing", http.StatusBadRequest)
+		return
+	}
+	defer garmentFile.Close()
+
+	// 4. Save them to temporary files so our AI client can read them
+	tempUser, _ := os.CreateTemp("", "user-*.jpg")
+	defer os.Remove(tempUser.Name()) // Automatically deletes file when function finishes
+	io.Copy(tempUser, userFile)
+
+	tempGarment, _ := os.CreateTemp("", "garment-*.jpg")
+	defer os.Remove(tempGarment.Name())
+	io.Copy(tempGarment, garmentFile)
+
+	// 5. Fire the files across the bridge to Python!
+	resultBytes, err := SendToVirtualTryOn(tempUser.Name(), tempGarment.Name())
+	if err != nil {
+		http.Error(w, "AI Processing failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 6. Forward the Python response directly back to the user
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resultBytes)
 }

@@ -54,6 +54,8 @@ func main() {
 	})
 	http.HandleFunc("/recommend", getRecommendationHandler) // recommendation doorway
 
+
+	http.HandleFunc("/api/wardrobe/tryon", HandleVirtualTryOn) // ai tryon doorway
 	// Starts the server
 	fmt.Println("Server is starting on port 8080...")
 	err = http.ListenAndServe(":8080", nil)

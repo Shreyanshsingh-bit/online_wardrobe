@@ -52,7 +52,7 @@ func SendToVirtualTryOn(userImagePath, garmentImagePath string) ([]byte, error) 
 	// Close the writer to finalize the multipart boundaries
 	bodyWriter.Close()
 
-	// 5. Build and fire the HTTP request
+	//Build and fire the HTTP request
 	req, err := http.NewRequest("POST", targetURL, bodyBuf)
 	if err != nil {
 		return nil, fmt.Errorf("failed creating request: %w", err)
@@ -69,7 +69,7 @@ func SendToVirtualTryOn(userImagePath, garmentImagePath string) ([]byte, error) 
 	}
 	defer resp.Body.Close()
 
-	// 6. Read the result back from Python
+	//Read the result back from Python
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed reading response body: %w", err)
